@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "traceability": {
+      "command": "node",
+      "args": ["tools/mcp/traceability/dist/index.js"]
+    },
+    "ears-validator": {
+      "command": "node",
+      "args": ["tools/mcp/ears-validator/dist/index.js"]
+    }
+  }
+}

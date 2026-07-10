@@ -1,0 +1,29 @@
+schema_version: "1.0"
+
+extension:
+  id: architecture-guardian
+  name: "Architecture Guardian"
+  version: "1.0.0"
+  description: "Before /speckit-plan, dispatches the architect agent: detects a greenfield repo (no structure/code), proposes the architecture grounded in the constitution alongside the plan, creates one ADR per decision under docs/adr/, and maintains an ADR history/index for future changes and new ADRs."
+  author: eduardo.cordero
+  license: MIT
+
+requires:
+  speckit_version: ">=0.2.0"
+
+provides:
+  commands:
+    - name: speckit.architecture-guardian.propose
+      file: commands/speckit.architecture-guardian.propose.md
+      description: "Detect greenfield, propose architecture + ADRs grounded in the constitution before /speckit-plan"
+
+hooks:
+  before_plan:
+    command: speckit.architecture-guardian.propose
+    optional: false
+    description: "Propose architecture and create/maintain ADRs (grounded in the constitution) before planning"
+
+tags:
+  - "architecture"
+  - "adr"
+  - "governance"

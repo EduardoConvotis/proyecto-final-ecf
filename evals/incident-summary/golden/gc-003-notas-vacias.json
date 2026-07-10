@@ -1,0 +1,6 @@
+{
+  "id": "gc-003",
+  "description": "Notas vacías → el resumen debe abstenerse (insufficient_evidence).",
+  "input": { "executionId": "exec-003", "notes": "" },
+  "expect": { "status": "insufficient_evidence" }
+}

@@ -1,0 +1,6 @@
+{
+  "id": "gc-004",
+  "description": "Notas demasiado cortas ('ok') → abstención (insufficient_evidence).",
+  "input": { "executionId": "exec-004", "notes": "ok" },
+  "expect": { "status": "insufficient_evidence" }
+}

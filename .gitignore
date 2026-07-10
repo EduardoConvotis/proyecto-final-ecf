@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+backend/src/generated/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Prisma
+backend/prisma/*.db
+
+# Evidence store (local dev)
+backend/.evidence-store/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Angular
+.angular/
+frontend/.angular/

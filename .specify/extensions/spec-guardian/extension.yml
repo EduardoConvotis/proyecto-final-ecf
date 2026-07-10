@@ -1,0 +1,37 @@
+schema_version: "1.0"
+
+extension:
+  id: spec-guardian
+  name: "Spec Guardian"
+  version: "1.0.0"
+  description: "Guards the specification lifecycle: before /speckit-specify it detects Product-Owner vs Developer input and rewrites PO text into technical language without inventing (deferring doubts to after the command); after /speckit-specify it reviews the spec for constitution traceability, test traceability, EARS conformance of every functional requirement, and edge-case test coverage."
+  author: eduardo.cordero
+  license: MIT
+
+requires:
+  speckit_version: ">=0.2.0"
+
+provides:
+  commands:
+    - name: speckit.spec-guardian.normalize
+      file: commands/speckit.spec-guardian.normalize.md
+      description: "Detect PO vs Developer input and normalize it to technical language before /speckit-specify"
+    - name: speckit.spec-guardian.review
+      file: commands/speckit.spec-guardian.review.md
+      description: "Review the specification (constitution + test traceability, EARS, edge cases) after /speckit-specify"
+
+hooks:
+  before_specify:
+    command: speckit.spec-guardian.normalize
+    optional: false
+    description: "Classify author and normalize Product Owner input to technical language (never invents; defers doubts)"
+  after_specify:
+    command: speckit.spec-guardian.review
+    optional: false
+    description: "Audit the spec for constitution/test traceability, EARS conformance and edge-case coverage"
+
+tags:
+  - "specification"
+  - "traceability"
+  - "ears"
+  - "review"

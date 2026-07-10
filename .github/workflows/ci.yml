@@ -1,0 +1,47 @@
+name: CI
+
+# Puertas de calidad automatizadas (Principios I, IV, V, VII, VIII).
+# Hace cumplir lo que la constitución exige y que hoy dependía de disciplina manual.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fieldops
+          POSTGRES_PASSWORD: fieldops
+          POSTGRES_DB: fieldops
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://fieldops:fieldops@localhost:5432/fieldops?schema=public
+      JWT_SECRET: ci-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Contract-first (Principio VII): tipos derivados del contrato antes de compilar.
+      - run: npm run gen:api --workspaces
+      - run: npm run db:migrate --workspace backend -- --skip-generate || npx --workspace backend prisma migrate deploy
+      # Principio I: TypeScript estricto sin any injustificado.
+      - run: npm run typecheck
+      # Principio VIII (Tailwind) + I: lint con eslint-plugin-tailwindcss y no-explicit-any.
+      - run: npm run lint
+      # Principio IV (Test-First): suites obligatorias.
+      - run: npm test
+      # Eval-gate del resumen de incidencia (ADR-0009). Se ejecuta y reporta, pero NO bloquea
+      # todavía: el adaptador es un stopgap determinista que no satisface la abstención semántica
+      # de FR-023 (notas sin incidencia identificable) — eso requiere el proveedor de IA real
+      # (decisión diferida, ADR-0007). Quitar `continue-on-error` cuando se integre el proveedor.
+      - run: npm run eval:incident-summary --workspace backend
+        continue-on-error: true

@@ -1,0 +1,36 @@
+schema_version: "1.0"
+
+extension:
+  id: constitution-guardian
+  name: "Constitution Guardian"
+  version: "1.0.0"
+  description: "Guards the constitution lifecycle: interviews the user with foundational questions before a from-scratch constitution (only when none exists yet and the project is empty or has just the basics), and traces every principle (law) to its enforcement/verification after the constitution is written."
+  author: eduardo.cordero
+  license: MIT
+
+requires:
+  speckit_version: ">=0.2.0"
+
+provides:
+  commands:
+    - name: speckit.constitution-guardian.preflight
+      file: commands/speckit.constitution-guardian.preflight.md
+      description: "Gate + foundational interview before /speckit-constitution (from-scratch projects only)"
+    - name: speckit.constitution-guardian.traceability
+      file: commands/speckit.constitution-guardian.traceability.md
+      description: "Dispatch the constitution-traceability agent after /speckit-constitution"
+
+hooks:
+  before_constitution:
+    command: speckit.constitution-guardian.preflight
+    optional: false
+    description: "Interview the user for a from-scratch constitution (self-gated: only when no constitution exists and the project is empty/basic)"
+  after_constitution:
+    command: speckit.constitution-guardian.traceability
+    optional: false
+    description: "Trace every constitution principle (law) to its enforcement and verification"
+
+tags:
+  - "constitution"
+  - "governance"
+  - "traceability"

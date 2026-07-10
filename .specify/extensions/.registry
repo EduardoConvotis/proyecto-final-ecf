@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0",
+  "extensions": {
+    "agent-context": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:9a1dc02d2d0139bb03860392ecacef79183be2c442feda2f9ccaa4e5907b1e47",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.agent-context.update"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-10T06:59:52.304619+00:00"
+    },
+    "constitution-guardian": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:6840931b60a4fe33fe29b4aecbae00edecfee08fbf39b0cd9bae3fed8a36cac5",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.constitution-guardian.preflight",
+          "speckit.constitution-guardian.traceability"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-10T09:00:00.000000+00:00"
+    },
+    "spec-guardian": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:c16b471a04e2e963182873473c89b4f804af16f510945c31ed43c67b83b2da51",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.spec-guardian.normalize",
+          "speckit.spec-guardian.review"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-10T09:05:00.000000+00:00"
+    },
+    "architecture-guardian": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:5871891525b49ed06a4a9be800da8844e9c090869224c00ea15b36a3a64ddbce",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.architecture-guardian.propose"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-10T09:10:00.000000+00:00"
+    },
+    "analyze-guardian": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:865645273b7a531227afb6a432149a222eb480cb4f7e31cf953965001202d9bf",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.analyze-guardian.preflight",
+          "speckit.analyze-guardian.report"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-10T09:15:00.000000+00:00"
+    },
+    "implement-guardian": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:e98ea7c59e281d79b297b43b400a048573f2d3b6ca28091ebb785e06973dd880",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.implement-guardian.gate"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-10T09:15:00.000000+00:00"
+    },
+    "branch-guardian": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:4a26f82ecc41143dda64de11ce61bf6eb128ced709a2fead54d50a7d36914c89",
+      "enabled": true,
+      "priority": 5,
+      "registered_commands": {
+        "claude": [
+          "speckit.branch-guardian.create"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-10T09:20:00.000000+00:00"
+    }
+  }
+}

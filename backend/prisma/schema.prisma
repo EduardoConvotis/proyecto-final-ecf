@@ -1,0 +1,123 @@
+// Prisma schema para FieldOps (ADR-0005). Entidades de data-model.md.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  tecnico
+  dispatcher
+  supervisor
+}
+
+enum OrderState {
+  Asignada
+  EnEjecucion
+  Enviada
+  Aprobada
+  Rechazada
+}
+
+enum SummaryStatus {
+  ok
+  insufficient_evidence
+  provider_failed
+}
+
+model User {
+  id           String  @id @default(uuid())
+  username     String  @unique
+  passwordHash String
+  role         Role
+  // órdenes actualmente asignadas a este usuario (técnico)
+  assignedOrders WorkOrder[] @relation("assignedTechnician")
+}
+
+model WorkOrder {
+  id                   String     @id @default(uuid())
+  customer             String
+  address              String
+  service              String
+  date                 DateTime
+  state                OrderState @default(Asignada)
+  assignedTechnician   User       @relation("assignedTechnician", fields: [assignedTechnicianId], references: [id])
+  assignedTechnicianId String
+  materials            Material[]
+  executions           ExecutionRecord[]
+  reassignments        Reassignment[]
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+}
+
+model Material {
+  id          String    @id @default(uuid())
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId String
+  description String
+  quantity    Int
+  price       Decimal
+}
+
+model ExecutionRecord {
+  id                  String          @id @default(uuid())
+  workOrder           WorkOrder       @relation(fields: [workOrderId], references: [id])
+  workOrderId         String
+  technicianNotes     String?
+  location            String
+  signatureRef        String
+  workDurationMinutes Int
+  submittedAt         DateTime        @default(now())
+  photos              EvidencePhoto[]
+  review              ReviewDecision?
+  summary             IncidentSummary?
+}
+
+model EvidencePhoto {
+  id                String          @id @default(uuid())
+  execution         ExecutionRecord @relation(fields: [executionRecordId], references: [id])
+  executionRecordId String
+  storageRef        String
+  contentType       String // debe ser image/jpeg (FR-014)
+  sizeBytes         Int // <= 10 MB (FR-014)
+}
+
+model IncidentSummary {
+  id                String          @id @default(uuid())
+  execution         ExecutionRecord @relation(fields: [executionRecordId], references: [id])
+  executionRecordId String          @unique
+  status            SummaryStatus
+  summary           String?
+  keyPoints         Json // KeyPoint[] { text, sourceNoteFragment }
+  generatedAt       DateTime        @default(now())
+}
+
+model ReviewDecision {
+  id                String          @id @default(uuid())
+  execution         ExecutionRecord @relation(fields: [executionRecordId], references: [id])
+  executionRecordId String          @unique
+  supervisorId      String
+  outcome           String // approved | rejected
+  decidedAt         DateTime        @default(now())
+}
+
+model Reassignment {
+  id                String    @id @default(uuid())
+  workOrder         WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId       String
+  dispatcherId      String
+  fromTechnicianId  String
+  toTechnicianId    String
+  at                DateTime  @default(now())
+}
+
+model AuditEntry {
+  id        String   @id @default(uuid())
+  actorId   String?
+  action    String
+  resource  String
+  timestamp DateTime @default(now())
+}

@@ -1,0 +1,5 @@
+{
+  "hallucinations_max": 0,
+  "abstention_rate_min": 0.95,
+  "key_point_recall_min": 0.8
+}

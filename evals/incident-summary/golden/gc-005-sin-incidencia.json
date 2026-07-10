@@ -1,0 +1,6 @@
+{
+  "id": "gc-005",
+  "description": "Notas sin incidencia identificable (saludo) → abstención, sin fabricar incidencia.",
+  "input": { "executionId": "exec-005", "notes": "Hola, buenas. Paso a saludar." },
+  "expect": { "status": "insufficient_evidence" }
+}

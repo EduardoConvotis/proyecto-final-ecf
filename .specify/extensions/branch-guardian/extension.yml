@@ -1,0 +1,29 @@
+schema_version: "1.0"
+
+extension:
+  id: branch-guardian
+  name: "Branch Guardian"
+  version: "1.0.0"
+  description: "Before /speckit-specify, creates and switches to a git branch named after the feature (NNN-short-name) using Spec Kit's official namer, so the branch matches the spec directory. Creates only the branch (never the spec directory) and outputs BRANCH_NAME/FEATURE_NUM for the specify command to reuse."
+  author: eduardo.cordero
+  license: MIT
+
+requires:
+  speckit_version: ">=0.2.0"
+
+provides:
+  commands:
+    - name: speckit.branch-guardian.create
+      file: commands/speckit.branch-guardian.create.md
+      description: "Create/switch to a feature-named git branch before /speckit-specify"
+
+hooks:
+  before_specify:
+    command: speckit.branch-guardian.create
+    optional: false
+    description: "Create and switch to a git branch named after the feature before specifying"
+
+tags:
+  - "git"
+  - "branch"
+  - "specify"

@@ -1,0 +1,29 @@
+schema_version: "1.0"
+
+extension:
+  id: implement-guardian
+  name: "Implement Guardian"
+  version: "1.0.0"
+  description: "Hard quality gate before /speckit-implement: blocks implementation if there are unresolved CRITICAL findings or constitution-MUST violations, read from specs/<feature>/analysis-report.md and re-verified live with the traceability MCP (FR without task, leaked 'tests OPTIONAL' wording)."
+  author: eduardo.cordero
+  license: MIT
+
+requires:
+  speckit_version: ">=0.2.0"
+
+provides:
+  commands:
+    - name: speckit.implement-guardian.gate
+      file: commands/speckit.implement-guardian.gate.md
+      description: "Block /speckit-implement on unresolved CRITICAL / constitution-MUST / coverage gaps"
+
+hooks:
+  before_implement:
+    command: speckit.implement-guardian.gate
+    optional: false
+    description: "Hard gate: refuse implementation while CRITICAL findings or constitution-MUST violations remain"
+
+tags:
+  - "implement"
+  - "quality-gate"
+  - "governance"

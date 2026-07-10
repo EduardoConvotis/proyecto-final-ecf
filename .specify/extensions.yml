@@ -1,0 +1,108 @@
+installed:
+- agent-context
+- constitution-guardian
+- spec-guardian
+- architecture-guardian
+- analyze-guardian
+- implement-guardian
+- branch-guardian
+settings:
+  auto_execute_hooks: true
+hooks:
+  before_analyze:
+  - extension: analyze-guardian
+    command: speckit.analyze-guardian.preflight
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Gather deterministic ground-truth facts before analysis?
+    description: Feed the analysis FR↔task/test coverage, EARS, RBAC/AI/contract-first facts
+    condition: null
+  after_analyze:
+  - extension: analyze-guardian
+    command: speckit.analyze-guardian.report
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Persist the analysis report?
+    description: Write specs/<feature>/analysis-report.md with stable IDs and a diff vs previous run
+    condition: null
+  before_implement:
+  - extension: implement-guardian
+    command: speckit.implement-guardian.gate
+    enabled: true
+    optional: false
+    priority: 5
+    prompt: Run the pre-implement quality gate?
+    description: Block implementation on unresolved CRITICAL / constitution-MUST / coverage gaps
+    condition: null
+  before_plan:
+  - extension: architecture-guardian
+    command: speckit.architecture-guardian.propose
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Propose architecture + ADRs before planning?
+    description: Detect greenfield, propose architecture and create/maintain ADRs grounded in the constitution
+    condition: null
+  before_specify:
+  - extension: branch-guardian
+    command: speckit.branch-guardian.create
+    enabled: true
+    optional: false
+    priority: 5
+    prompt: Create a git branch named after the feature?
+    description: Create and switch to a git branch (NNN-short-name) before specifying
+    condition: null
+  - extension: spec-guardian
+    command: speckit.spec-guardian.normalize
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Normalize the feature input (PO vs Developer)?
+    description: Classify author and normalize Product Owner input to technical language
+    condition: null
+  before_constitution:
+  - extension: constitution-guardian
+    command: speckit.constitution-guardian.preflight
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Run the from-scratch constitution interview?
+    description: Interview the user for a from-scratch constitution (self-gated)
+    condition: null
+  after_constitution:
+  - extension: constitution-guardian
+    command: speckit.constitution-guardian.traceability
+    enabled: true
+    optional: false
+    priority: 10
+    prompt: Trace every constitution principle (law)?
+    description: Map each constitution principle to its enforcement and verification
+    condition: null
+  after_specify:
+  - extension: spec-guardian
+    command: speckit.spec-guardian.review
+    enabled: true
+    optional: false
+    priority: 5
+    prompt: Review the specification (traceability, EARS, edge cases)?
+    description: Audit spec for constitution/test traceability, EARS conformance and edge cases
+    condition: null
+  - extension: agent-context
+    command: speckit.agent-context.update
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Execute speckit.agent-context.update?
+    description: Refresh agent context after specification
+    condition: null
+  after_plan:
+  - extension: agent-context
+    command: speckit.agent-context.update
+    enabled: true
+    optional: true
+    priority: 10
+    prompt: Execute speckit.agent-context.update?
+    description: Refresh agent context after planning
+    condition: null

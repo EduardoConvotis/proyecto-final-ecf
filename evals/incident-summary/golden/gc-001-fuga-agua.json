@@ -1,0 +1,13 @@
+{
+  "id": "gc-001",
+  "description": "Notas con incidencia clara (fuga de agua) → resumen correcto y grounded.",
+  "input": {
+    "executionId": "exec-001",
+    "notes": "Al llegar encontré una fuga de agua bajo el fregadero de la cocina. Cerré la llave de paso y sequé la zona."
+  },
+  "expect": {
+    "status": "ok",
+    "keyFacts": ["fuga de agua", "cocina"],
+    "mustNotContain": ["incendio", "electrocución"]
+  }
+}

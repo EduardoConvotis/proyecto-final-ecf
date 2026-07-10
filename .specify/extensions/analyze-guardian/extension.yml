@@ -1,0 +1,36 @@
+schema_version: "1.0"
+
+extension:
+  id: analyze-guardian
+  name: "Analyze Guardian"
+  version: "1.0.0"
+  description: "Strengthens /speckit-analyze: before it, gathers deterministic ground-truth facts (FR↔task/test coverage, EARS, RBAC deny coverage, AI verifiability, contract-first propagation, TDD ordering, ADR consistency) via the traceability/ears-validator MCPs; after it, persists the analysis report to specs/<feature>/analysis-report.md with stable IDs for auditability."
+  author: eduardo.cordero
+  license: MIT
+
+requires:
+  speckit_version: ">=0.2.0"
+
+provides:
+  commands:
+    - name: speckit.analyze-guardian.preflight
+      file: commands/speckit.analyze-guardian.preflight.md
+      description: "Gather deterministic ground-truth facts before /speckit-analyze"
+    - name: speckit.analyze-guardian.report
+      file: commands/speckit.analyze-guardian.report.md
+      description: "Persist the analysis report with stable IDs after /speckit-analyze"
+
+hooks:
+  before_analyze:
+    command: speckit.analyze-guardian.preflight
+    optional: false
+    description: "Feed the analysis deterministic FR↔task/test coverage, EARS, RBAC/AI/contract-first facts"
+  after_analyze:
+    command: speckit.analyze-guardian.report
+    optional: false
+    description: "Persist analysis-report.md (stable IDs, diff vs previous run)"
+
+tags:
+  - "analyze"
+  - "traceability"
+  - "quality-gate"

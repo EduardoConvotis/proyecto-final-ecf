@@ -1,0 +1,17 @@
+{
+  "name": "fieldops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FieldOps — operaciones de campo que ejecutan las aseguradoras",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "gen:api": "npm run gen:api --workspaces --if-present",
+    "dev": "npm run dev --workspaces --if-present"
+  }
+}

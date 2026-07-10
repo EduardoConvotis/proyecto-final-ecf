@@ -1,0 +1,13 @@
+{
+  "id": "gc-002",
+  "description": "Incidencia eléctrica; el resumen NO debe inventar un coste no presente en las notas.",
+  "input": {
+    "executionId": "exec-002",
+    "notes": "El cuadro eléctrico presentaba un cortocircuito en el diferencial. Sustituí el diferencial y verifiqué la instalación."
+  },
+  "expect": {
+    "status": "ok",
+    "keyFacts": ["cuadro eléctrico", "cortocircuito"],
+    "mustNotContain": ["coste", "300", "€"]
+  }
+}

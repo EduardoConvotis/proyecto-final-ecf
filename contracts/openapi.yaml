@@ -1,0 +1,329 @@
+openapi: 3.1.0
+info:
+  title: FieldOps API
+  version: 0.1.0
+  description: >
+    Contrato único de verdad (Principio VII) para la feature 001 — Ejecución y Revisión de Órdenes
+    de Trabajo. Cada operación referencia su requisito funcional (`x-fr`). Los tipos de cliente y
+    servidor se derivan de este documento (openapi-typescript); ninguna operación se implementa antes
+    de definirse aquí.
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+  - name: orders
+  - name: execution
+  - name: review
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Autenticación de usuario (emite JWT con rol)
+      description: >
+        Credenciales válidas → sesión autenticada con rol (FR-026). Credenciales inválidas → 401 con
+        mensaje genérico que no revela si falló usuario o contraseña (FR-027).
+      x-fr: [FR-011, FR-012, FR-026, FR-027]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Autenticado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthToken' }
+        '401':
+          description: Credenciales inválidas — mensaje genérico, sin sesión (FR-027)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Cierre de sesión del usuario autenticado
+      description: Finaliza la sesión; se requiere login de nuevo para funciones protegidas (FR-029).
+      x-fr: [FR-029]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204':
+          description: Sesión finalizada
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /orders:
+    get:
+      tags: [orders]
+      operationId: listMyOrders
+      summary: Lista únicamente las órdenes asignadas al usuario autenticado
+      description: No devuelve órdenes de otros usuarios (lista vacía si no tiene ninguna).
+      x-fr: [FR-010]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Órdenes del usuario (posiblemente vacía)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /orders/{orderId}:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    get:
+      tags: [orders]
+      operationId: getOrder
+      summary: Detalle de una orden asignada al usuario
+      description: 404 si la orden no está asignada al usuario (no se revela existencia).
+      x-fr: [FR-010, FR-018]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Orden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/{orderId}/execution:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      tags: [execution]
+      operationId: submitExecution
+      summary: El técnico asignado registra y envía la ejecución
+      description: >
+        Requiere ≥1 foto JPEG ≤10 MB (máx 15), ubicación, firma y duración del trabajo. Transiciona
+        la orden a "Enviada". Solo el técnico asignado (rol técnico).
+      x-fr: [FR-002, FR-003, FR-004, FR-014, FR-015, FR-016]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ExecutionSubmission' }
+      responses:
+        '201':
+          description: Ejecución registrada; orden en estado Enviada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+        '400':
+          description: >
+            Envío inválido — sin foto (FR-003), foto no JPEG o >10 MB (FR-014), o sin ubicación/firma
+            (FR-015). La orden permanece en su estado previo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/{orderId}/reassignment:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      tags: [orders]
+      operationId: reassignOrder
+      summary: El dispatcher reasigna la orden a otro técnico
+      description: Permitida solo si la orden no está Aprobada. Solo rol dispatcher.
+      x-fr: [FR-005, FR-006, FR-019]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReassignRequest' }
+      responses:
+        '200':
+          description: Reasignada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Actor sin rol dispatcher (FR-019) o orden ya Aprobada (FR-006). Técnico sin cambios.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/{orderId}/review:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    get:
+      tags: [review]
+      operationId: openReview
+      summary: El supervisor abre una ejecución enviada para revisión (incluye resumen de incidencia)
+      description: >
+        Devuelve la ejecución con el resumen de incidencia generado desde las notas (FR-017). Si el
+        resumen no está disponible, incluye las notas como fallback. Solo rol supervisor.
+      x-fr: [FR-007, FR-017, FR-020, FR-023, FR-024, FR-025]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Ejecución con resumen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReviewView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [review]
+      operationId: decideReview
+      summary: El supervisor aprueba o rechaza la ejecución enviada
+      description: >
+        approve → Aprobada (FR-008); reject → Rechazada, disponible para reenvío (FR-009). Solo rol
+        supervisor; en caso contrario 403 y la orden permanece en su estado previo.
+      x-fr: [FR-007, FR-008, FR-009, FR-021, FR-022]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDecision' }
+      responses:
+        '200':
+          description: Decisión aplicada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Autenticado pero sin rol autorizado (403)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Recurso no encontrado o no asignado al usuario (404)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Role:
+      type: string
+      enum: [tecnico, dispatcher, supervisor]
+    OrderState:
+      type: string
+      enum: [Asignada, EnEjecucion, Enviada, Aprobada, Rechazada]
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+    AuthToken:
+      type: object
+      required: [token, role]
+      properties:
+        token: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+    Material:
+      type: object
+      required: [description, quantity, price]
+      properties:
+        description: { type: string }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        price: { type: number, minimum: 0 }
+    WorkOrder:
+      type: object
+      required: [id, customer, address, service, date, assignedTechnicianId, state]
+      properties:
+        id: { type: string, format: uuid }
+        customer: { type: string }
+        address: { type: string }
+        service: { type: string }
+        date: { type: string, format: date }
+        assignedTechnicianId: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/OrderState' }
+        materials:
+          type: array
+          items: { $ref: '#/components/schemas/Material' }
+    ExecutionSubmission:
+      type: object
+      required: [photos, location, signature, workDurationMinutes]
+      properties:
+        technicianNotes: { type: string }
+        location: { type: string, description: 'Ubicación de la ejecución (obligatoria, FR-015)' }
+        signature: { type: string, format: binary, description: 'Firma (obligatoria, FR-015)' }
+        workDurationMinutes: { type: integer, minimum: 0, description: 'Tiempo de trabajo (FR-016)' }
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 15
+          description: 'Fotos JPEG ≤10 MB (FR-003/004/014)'
+          items: { type: string, format: binary }
+    ReassignRequest:
+      type: object
+      required: [toTechnicianId]
+      properties:
+        toTechnicianId: { type: string, format: uuid }
+    ReviewDecision:
+      type: object
+      required: [outcome]
+      properties:
+        outcome: { type: string, enum: [approve, reject] }
+        comment: { type: string }
+    ReviewView:
+      type: object
+      required: [order, incidentSummary]
+      properties:
+        order: { $ref: '#/components/schemas/WorkOrder' }
+        technicianNotes: { type: string }
+        incidentSummary: { $ref: '#/components/schemas/IncidentSummary' }
+    IncidentSummary:
+      type: object
+      description: 'Resumen de incidencia (FR-017/023/024/025); contrato en contracts/ai/incident-summary.contract.md'
+      required: [status, keyPoints]
+      properties:
+        status:
+          type: string
+          enum: [ok, insufficient_evidence, provider_failed]
+          description: 'insufficient_evidence=abstención (FR-023); provider_failed=fallback a notas (FR-025)'
+        keyPoints:
+          type: array
+          description: 'Puntos clave; cada uno referencia el fragmento de nota que lo respalda (grounding, FR-024)'
+          items:
+            type: object
+            required: [text, sourceNoteFragment]
+            properties:
+              text: { type: string }
+              sourceNoteFragment: { type: string }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
