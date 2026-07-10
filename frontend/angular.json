@@ -15,6 +15,7 @@
             "outputPath": "dist/fieldops",
             "index": "src/index.html",
             "browser": "src/main.ts",
+            "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
             "assets": [],
             "styles": ["src/styles.css"],
@@ -47,5 +48,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": false
   }
 }

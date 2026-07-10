@@ -5,6 +5,7 @@ import { fileEvidenceStore } from '../infrastructure/evidence-store.js';
 import { recordAudit } from '../infrastructure/audit.js';
 import { requireAuth, requireRole, type AuthedRequest } from '../middleware/auth.js';
 import { submitExecution, ExecutionValidationError } from '../domain/execution.js';
+import { InvalidTransitionError } from '../domain/order-state.js';
 
 // POST /orders/{orderId}/execution — el técnico asignado registra la ejecución (US1).
 // FR-002/003/004/014/015/016, FR-011. La evidencia llega como multipart/form-data.
@@ -66,6 +67,11 @@ executionRouter.post(
     } catch (err) {
       if (err instanceof ExecutionValidationError) {
         res.status(400).json({ code: 'invalid_submission', message: err.message });
+        return;
+      }
+      if (err instanceof InvalidTransitionError) {
+        // p. ej. reenviar una orden que ya no está EnEjecucion (FR-002)
+        res.status(409).json({ code: 'invalid_state', message: err.message });
         return;
       }
       throw err;

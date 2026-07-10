@@ -21,8 +21,13 @@ export function createApp() {
   app.use('/api/v1', ordersRouter);
 
   const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+    const raw = (err as { statusCode?: unknown }).statusCode;
+    const status = typeof raw === 'number' && raw >= 400 && raw < 600 ? raw : 500;
     logger.error({ err }, 'unhandled.error');
-    res.status(500).json({ code: 'internal_error', message: 'Error interno' });
+    res.status(status).json({
+      code: status === 400 ? 'bad_request' : 'internal_error',
+      message: status === 400 ? 'Solicitud inválida' : 'Error interno',
+    });
   };
   app.use(errorHandler);
   return app;

@@ -60,7 +60,7 @@ export class LoginComponent {
     this.loading.set(true);
     try {
       await this.auth.login(this.username, this.password);
-      await this.router.navigate(['/']);
+      await this.router.navigate(['/orders']);
     } catch {
       // FR-027: mensaje genérico, no distingue usuario de contraseña.
       this.error.set('Usuario o contraseña incorrectos');

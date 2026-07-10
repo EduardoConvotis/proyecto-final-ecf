@@ -24,5 +24,5 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./features/orders/reassign/reassign.component').then((m) => m.ReassignComponent),
   },
-  { path: '', pathMatch: 'full', redirectTo: 'login' },
+  { path: '', pathMatch: 'full', redirectTo: 'orders' },
 ];
