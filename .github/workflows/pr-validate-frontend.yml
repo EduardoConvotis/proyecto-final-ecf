@@ -1,0 +1,65 @@
+# PR validator — FRONTEND (feature 002-cicd-pipeline).
+# Gate de PR feature/* → develop. Jobs bloqueantes (FR-005/006). Sin bypass.
+# Aislamiento (FR-003b): solo corre si cambió frontend/ o el contrato. Paralelo al de backend (FR-004, FR-002).
+
+name: pr-validate-frontend
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'frontend/**'
+      - 'contracts/openapi.yaml'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint-test:                       # FR-005a
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace frontend
+      - run: npm run typecheck --workspace frontend
+      - run: npm run lint --workspace frontend
+      - run: npm run test --workspace frontend
+
+  secrets-gitleaks:                # FR-005e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  constitution-review:             # FR-005h / FR-017 (fail-closed)
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: read }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Revisión de constitución (agente)
+        id: review
+        uses: anthropics/claude-code-action@v1
+        continue-on-error: true
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt_file: contracts/constitution-review.contract.md
+      - name: Gate fail-closed (FR-017)
+        run: |
+          verdict=$(jq -r '.verdict // "missing"' verdict.json 2>/dev/null || echo "missing")
+          echo "verdict=$verdict"
+          if [ "$verdict" != "pass" ]; then
+            echo "::error title=constitution-review::verdict='$verdict' (fail-closed, FR-017)"
+            exit 1
+          fi
+
+  code-review-recorded:            # Job dummy certificador
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Code review registrado como stage certificador (placeholder de revisión por pares futura)."

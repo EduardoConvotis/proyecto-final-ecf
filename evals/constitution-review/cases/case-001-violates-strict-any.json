@@ -1,0 +1,7 @@
+{
+  "id": "case-001-violates-strict-any",
+  "description": "PR de backend que introduce `any` sin justificación → viola Principio I (TypeScript estricto).",
+  "expectedVerdict": "fail",
+  "expectedPrinciple": "I",
+  "diff": "--- a/backend/src/orders/order.service.ts\n+++ b/backend/src/orders/order.service.ts\n@@\n-  parse(input: OrderInput): Order {\n+  parse(input: any): Order {\n     return input as Order;\n   }"
+}

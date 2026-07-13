@@ -1,0 +1,130 @@
+# main — FRONTEND (feature 002-cicd-pipeline).
+# push a main → CI completo + SemVer + build imagen semver en GHCR (CI) + GitHub Release con dist
+# comprimido como asset + deploy pre (auto) + prod (aprobado). No rebuild en CD: los deploy
+# reutilizan la imagen del CI. Rollback vía workflow_dispatch.
+
+name: main-frontend
+
+on:
+  push:
+    branches: [main]
+    paths: ['frontend/**', 'contracts/openapi.yaml']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Entorno a revertir"
+        required: true
+        type: choice
+        options: [pre, prod]
+      rollback_tag:
+        description: "Versión estable a la que revertir (p. ej. 1.4.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  ci:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace frontend
+      - run: npm run typecheck --workspace frontend
+      - run: npm run lint --workspace frontend
+      - run: npm run test --workspace frontend
+
+  version:
+    if: github.event_name == 'push'
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      semver: ${{ steps.bump.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: bump
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: frontend-v
+          release_branches: main
+
+  build:                     # CI construye la imagen con la semver final y la publica en GHCR
+    if: github.event_name == 'push'
+    needs: version
+    uses: ./.github/workflows/_build-push.yml
+    with:
+      component: frontend
+      tag: ${{ needs.version.outputs.semver }}
+
+  release:
+    if: github.event_name == 'push'
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace frontend
+      - run: npm run build --workspace frontend
+      - name: Comprimir dist para el Release
+        run: tar -czf frontend-dist-${{ needs.version.outputs.semver }}.tar.gz -C frontend/dist fieldops
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: frontend-v${{ needs.version.outputs.semver }}
+          name: frontend v${{ needs.version.outputs.semver }}
+          body: "Imagen (build-once): ${{ needs.build.outputs.image }}"
+          files: frontend-dist-*.tar.gz
+
+  deploy-pre:
+    if: github.event_name == 'push'
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    environment: pre
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/deploy
+        with:
+          component: frontend
+          image: ${{ needs.build.outputs.image }}
+          environment: pre
+          version: ${{ needs.version.outputs.semver }}
+
+  deploy-prod:
+    if: github.event_name == 'push'
+    needs: [version, build, deploy-pre]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/deploy
+        with:
+          component: frontend
+          image: ${{ needs.build.outputs.image }}
+          environment: prod
+          version: ${{ needs.version.outputs.semver }}
+
+  rollback:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver imagen estable
+        id: img
+        run: |
+          repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${repo_lc}/fieldops-frontend:${{ inputs.rollback_tag }}" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/deploy
+        with:
+          component: frontend
+          image: ${{ steps.img.outputs.image }}
+          environment: ${{ inputs.environment }}
+          version: ${{ inputs.rollback_tag }}

@@ -1,0 +1,14 @@
+[
+  {
+    "name": "health endpoint responde 200",
+    "method": "GET",
+    "path": "/health",
+    "expectStatus": 200
+  },
+  {
+    "name": "OpenAPI/docs disponible",
+    "method": "GET",
+    "path": "/api/health",
+    "expectStatus": 200
+  }
+]

@@ -1,0 +1,131 @@
+# main — BACKEND (feature 002-cicd-pipeline).
+# push a main → CI completo + SemVer (Conventional Commits) + build imagen semver en GHCR (CI) +
+# GitHub Release con dist comprimido como asset (FR-010) + deploy pre (auto) + prod (aprobación
+# manual, FR-011). No rebuild en CD: los jobs de deploy reutilizan la imagen del CI (FR-012/013).
+# workflow_dispatch → rollback a pre/prod (prod exige aprobación, FR-016).
+
+name: main-backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', 'contracts/openapi.yaml']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Entorno a revertir"
+        required: true
+        type: choice
+        options: [pre, prod]
+      rollback_tag:
+        description: "Versión estable a la que revertir (p. ej. 1.4.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: write            # crear tags/releases
+  packages: write            # re-tag en GHCR
+
+jobs:
+  ci:                        # CI completo (gate) sobre main
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace backend
+      - run: npm run typecheck --workspace backend
+      - run: npm run lint --workspace backend
+      - run: npm run test --workspace backend
+
+  version:                   # FR-009: SemVer por Conventional Commits (herramienta pluggable)
+    if: github.event_name == 'push'
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      semver: ${{ steps.bump.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: bump
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: backend-v
+          release_branches: main
+
+  build:                     # CI construye la imagen con la semver final y la publica en GHCR
+    if: github.event_name == 'push'
+    needs: version
+    uses: ./.github/workflows/_build-push.yml
+    with:
+      component: backend
+      tag: ${{ needs.version.outputs.semver }}
+
+  release:                   # FR-010: GitHub Release con dist comprimido como asset
+    if: github.event_name == 'push'
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace backend
+      - run: npm run build --workspace backend
+      - name: Comprimir dist para el Release
+        run: tar -czf backend-dist-${{ needs.version.outputs.semver }}.tar.gz -C backend dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: backend-v${{ needs.version.outputs.semver }}
+          name: backend v${{ needs.version.outputs.semver }}
+          body: "Imagen (build-once): ${{ needs.build.outputs.image }}"
+          files: backend-dist-*.tar.gz
+
+  deploy-pre:                # FR-010/010b: automático, solo el componente afectado
+    if: github.event_name == 'push'
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    environment: pre
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/deploy
+        with:
+          component: backend
+          image: ${{ needs.build.outputs.image }}
+          environment: pre
+          version: ${{ needs.version.outputs.semver }}
+
+  deploy-prod:               # FR-011: requiere aprobación (required reviewers del env prod)
+    if: github.event_name == 'push'
+    needs: [version, build, deploy-pre]
+    runs-on: ubuntu-latest
+    environment: prod        # GitHub bloquea hasta aprobación manual
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/deploy
+        with:
+          component: backend
+          image: ${{ needs.build.outputs.image }}
+          environment: prod
+          version: ${{ needs.version.outputs.semver }}
+
+  rollback:                  # FR-014/016 (US5): prod pasa por env con aprobación
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver imagen estable
+        id: img
+        run: |
+          repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${repo_lc}/fieldops-backend:${{ inputs.rollback_tag }}" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/deploy
+        with:
+          component: backend
+          image: ${{ steps.img.outputs.image }}
+          environment: ${{ inputs.environment }}
+          version: ${{ inputs.rollback_tag }}

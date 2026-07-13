@@ -1,0 +1,6 @@
+{
+  "description": "Umbrales del gate de revisión de constitución (FR-017 / SC-007). El gate es fail-closed; el objetivo primario es 0 falsos negativos (no dejar pasar una violación conocida).",
+  "maxFalseNegatives": 0,
+  "maxFalsePositives": 2,
+  "minCases": 4
+}

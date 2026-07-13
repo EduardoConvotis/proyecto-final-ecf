@@ -1,0 +1,7 @@
+{
+  "id": "case-004-compliant-tests-first",
+  "description": "PR que añade un test que falla primero y luego la implementación mínima → cumple Principio IV (TDD).",
+  "expectedVerdict": "pass",
+  "expectedPrinciple": null,
+  "diff": "--- /dev/null\n+++ b/backend/src/orders/__tests__/close.test.ts\n@@\n+it('cierra una orden abierta', () => { expect(close(open)).toBe('closed'); });\n--- a/backend/src/orders/order.service.ts\n+++ b/backend/src/orders/order.service.ts\n@@\n+export function close(o: Order): Order { return { ...o, status: 'closed' }; }\n"
+}

@@ -1,0 +1,139 @@
+# PR validator — BACKEND (feature 002-cicd-pipeline).
+# Gate de PR feature/* → develop. Todos los jobs son bloqueantes (FR-005/006). Sin bypass.
+# Aislamiento (FR-003b): solo corre si cambió backend/ o el contrato. Paralelo al de frontend (FR-004, FR-002).
+
+name: pr-validate-backend
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'backend/**'
+      - 'contracts/openapi.yaml'
+      - 'tools/ci/**'
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: read
+
+jobs:
+  lint-test:                       # FR-005a
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: fieldops, POSTGRES_PASSWORD: fieldops, POSTGRES_DB: fieldops }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://fieldops:fieldops@localhost:5432/fieldops?schema=public
+      JWT_SECRET: ci-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace backend
+      - run: npm run typecheck --workspace backend
+      - run: npm run lint --workspace backend
+      - run: npm run test --workspace backend
+
+  openapi-spectral:                # FR-005c
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx --yes @stoplight/spectral-cli lint contracts/openapi.yaml
+
+  breaking-oasdiff:                # FR-005d
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Extraer contrato base (rama destino)
+        run: git show "origin/${{ github.base_ref }}:contracts/openapi.yaml" > /tmp/base-openapi.yaml || echo "sin base" > /tmp/base-openapi.yaml
+      - name: Detectar breaking changes
+        uses: oasdiff/oasdiff-action/breaking@main
+        with:
+          base: /tmp/base-openapi.yaml
+          revision: contracts/openapi.yaml
+          fail-on: ERR
+
+  secrets-gitleaks:                # FR-005e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  acceptance:                      # FR-005f (check-acceptance.js contra la API real)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: fieldops, POSTGRES_PASSWORD: fieldops, POSTGRES_DB: fieldops }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://fieldops:fieldops@localhost:5432/fieldops?schema=public
+      JWT_SECRET: ci-secret
+      API_BASE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace backend
+      - run: npx --workspace backend prisma migrate deploy
+      - run: npm run build --workspace backend
+      - name: Arrancar API
+        run: node backend/dist/server.js & npx --yes wait-on http://localhost:3000/health
+      - name: Verificar acceptance criteria
+        run: node tools/ci/check-acceptance.js --base "$API_BASE_URL" --checks tools/ci/acceptance/backend.json
+
+  trivy-image:                     # FR-005g
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build imagen (para escaneo; no se publica aquí)
+        run: docker build -f backend/Dockerfile -t fieldops-back:pr .
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: fieldops-back:pr
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+  constitution-review:             # FR-005h / FR-017 (fail-closed)
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: read }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      # Invoca al agente. Contrato: contracts/constitution-review.contract.md
+      # TODO(infra): cablear la Claude Code Action y volcar su veredicto a verdict.json.
+      - name: Revisión de constitución (agente)
+        id: review
+        uses: anthropics/claude-code-action@v1
+        continue-on-error: true      # capturamos el resultado y decidimos fail-closed abajo
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt_file: contracts/constitution-review.contract.md
+      - name: Gate fail-closed (FR-017)
+        run: |
+          # Cualquier cosa que no sea "pass" explícito ⇒ fallo. Sin verdict ⇒ fallo.
+          verdict=$(jq -r '.verdict // "missing"' verdict.json 2>/dev/null || echo "missing")
+          echo "verdict=$verdict"
+          if [ "$verdict" != "pass" ]; then
+            echo "::error title=constitution-review::verdict='$verdict' (fail-closed, FR-017)"
+            exit 1
+          fi
+
+  code-review-recorded:            # Job dummy que certifica el paso de code review (trazado, no oculto)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Code review registrado como stage certificador (placeholder de revisión por pares futura)."

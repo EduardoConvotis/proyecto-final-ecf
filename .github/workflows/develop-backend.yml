@@ -1,0 +1,88 @@
+# develop — BACKEND (feature 002-cicd-pipeline).
+# push a develop → CI completo + imagen snapshot x.y.z-snapshot.<sha> + push GHCR
+# + dist comprimido como workflow artifact (90 días) + deploy automático SOLO a dev (FR-007/008).
+# workflow_dispatch → rollback: redeploy de un tag GHCR existente a dev (FR-014, US5).
+# Aislamiento por paths (FR-003b); paralelo al de frontend (FR-004).
+
+name: develop-backend
+
+on:
+  push:
+    branches: [develop]
+    paths: ['backend/**', 'contracts/openapi.yaml']
+  workflow_dispatch:
+    inputs:
+      rollback_tag:
+        description: "Tag GHCR estable al que revertir (p. ej. 0.1.0-snapshot.abc1234)"
+        required: true
+        type: string
+
+jobs:
+  ci:                              # CI completo + dist artifact (90 días)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run gen:api --workspace backend
+      - run: npm run typecheck --workspace backend
+      - run: npm run lint --workspace backend
+      - run: npm run test --workspace backend
+      - run: npm run build --workspace backend
+      - name: Calcular tag snapshot x.y.z-snapshot.<sha>
+        id: tag
+        run: |
+          ver=$(node -p "require('./backend/package.json').version")
+          echo "tag=${ver}-snapshot.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Comprimir dist
+        run: tar -czf backend-dist-${GITHUB_SHA::7}.tar.gz -C backend dist
+      - name: Publicar dist como artifact (90 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist-${{ github.sha }}
+          path: backend-dist-*.tar.gz
+          retention-days: 90
+
+  build:                           # imagen snapshot a GHCR (build-once, FR-012/013)
+    if: github.event_name == 'push'
+    needs: ci
+    uses: ./.github/workflows/_build-push.yml
+    with:
+      component: backend
+      tag: ${{ needs.ci.outputs.tag }}
+
+  deploy-dev:
+    if: github.event_name == 'push'
+    needs: [ci, build]
+    runs-on: ubuntu-latest
+    environment: dev               # auto (sin required reviewers)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/deploy
+        with:
+          component: backend
+          image: ${{ needs.build.outputs.image }}
+          environment: dev
+          version: ${{ needs.ci.outputs.tag }}
+
+  rollback-dev:                    # FR-014 (US5): reusa imagen inmutable existente, sin rebuild
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver imagen a revertir
+        id: img
+        run: |
+          repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${repo_lc}/fieldops-backend:${{ inputs.rollback_tag }}" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/deploy
+        with:
+          component: backend
+          image: ${{ steps.img.outputs.image }}
+          environment: dev
+          version: ${{ inputs.rollback_tag }}

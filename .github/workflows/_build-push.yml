@@ -1,0 +1,63 @@
+# Reusable workflow: build + push de la imagen de un componente a GHCR.
+# Feature 002-cicd-pipeline · ADR-0012 (build-once) · FR-012/013.
+# Se invoca desde develop-*.yml (tag sha-<gitsha>). Los workflows de main NO reconstruyen:
+# re-etiquetan la imagen existente (ver main-*.yml), respetando build-once.
+
+name: _build-push
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: "frontend | backend"
+        required: true
+        type: string
+      tag:
+        description: "Tag de imagen (p. ej. sha-<gitsha> o <semver>)"
+        required: true
+        type: string
+    outputs:
+      image:
+        description: "Referencia completa de la imagen publicada"
+        value: ${{ jobs.build.outputs.image }}
+      digest:
+        description: "Digest inmutable de la imagen"
+        value: ${{ jobs.build.outputs.digest }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write        # requerido para push a GHCR (Q1, ADR-0012)
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolver referencia de imagen (minúsculas por requisito de GHCR)
+        id: meta
+        run: |
+          repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${repo_lc}/fieldops-${{ inputs.component }}:${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login en GHCR (GITHUB_TOKEN inyectado, sin secretos extra)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ inputs.component }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+          cache-from: type=gha,scope=${{ inputs.component }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.component }}

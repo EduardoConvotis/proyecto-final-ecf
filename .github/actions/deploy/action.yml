@@ -1,0 +1,41 @@
+# Composite action: desplegar un ref de imagen inmutable a un entorno.
+# Feature 002-cicd-pipeline · ADR-0012/0014 · FR-008/010/010b/013.
+# NO reconstruye: recibe la imagen que ya pasó CI y la promueve.
+#
+# NOTA DE INFRA: el paso real de despliegue depende del destino de dev/pre/prod
+# (Kubernetes, VM, servicio gestionado...), que aún no está aprovisionado. Aquí se deja el
+# contrato del deploy y un placeholder trazable; sustituir el bloque marcado por el mecanismo real.
+
+name: "Deploy image to environment"
+description: "Promueve una imagen inmutable (por referencia) a un entorno, sin reconstruir."
+
+inputs:
+  component:
+    description: "frontend | backend"
+    required: true
+  image:
+    description: "Referencia completa de la imagen (ghcr.io/.../fieldops-<comp>:<tag>)"
+    required: true
+  environment:
+    description: "dev | pre | prod"
+    required: true
+  version:
+    description: "Versión legible (sha-<gitsha> o <semver>) para trazar qué hay desplegado"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Registrar despliegue (SC-005: qué versión hay en cada entorno)
+      shell: bash
+      run: |
+        echo "::notice title=deploy::${{ inputs.component }}@${{ inputs.version }} -> ${{ inputs.environment }} (${{ inputs.image }})"
+        echo "${{ inputs.component }}@${{ inputs.version }}@${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+
+    # ----- INICIO placeholder de despliegue real (sustituir por infra de dev/pre/prod) -----
+    - name: Deploy (placeholder)
+      shell: bash
+      run: |
+        echo "Desplegando imagen inmutable ${{ inputs.image }} en '${{ inputs.environment }}'"
+        echo "Reemplazar por: kubectl set image / az webapp / render deploy / etc."
+    # ----- FIN placeholder -----

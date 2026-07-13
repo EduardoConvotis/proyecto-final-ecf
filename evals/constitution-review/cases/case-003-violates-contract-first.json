@@ -1,0 +1,7 @@
+{
+  "id": "case-003-violates-contract-first",
+  "description": "PR que añade un endpoint en el código sin definirlo antes en el contrato OpenAPI → viola Principio VII (Contract-First).",
+  "expectedVerdict": "fail",
+  "expectedPrinciple": "VII",
+  "diff": "--- a/backend/src/routes/orders.ts\n+++ b/backend/src/routes/orders.ts\n@@\n+router.post('/orders/:id/reopen', reopenHandler);  // sin operación en contracts/openapi.yaml\n"
+}

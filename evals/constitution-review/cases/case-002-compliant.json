@@ -1,0 +1,7 @@
+{
+  "id": "case-002-compliant",
+  "description": "PR que añade un endpoint con su operación previa en el contrato OpenAPI y tipos derivados → cumple Principios III/VII.",
+  "expectedVerdict": "pass",
+  "expectedPrinciple": null,
+  "diff": "--- a/contracts/openapi.yaml\n+++ b/contracts/openapi.yaml\n@@\n+  /orders/{id}/close:\n+    post:\n+      operationId: closeOrder\n+      summary: Cierra una orden (FR-021)\n"
+}

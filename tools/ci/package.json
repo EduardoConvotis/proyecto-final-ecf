@@ -1,0 +1,6 @@
+{
+  "name": "@fieldops/ci-tools",
+  "private": true,
+  "type": "module",
+  "description": "Scripts de CI (feature 002-cicd-pipeline). No es un workspace de la app."
+}
