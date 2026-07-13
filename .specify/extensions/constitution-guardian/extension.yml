@@ -16,15 +16,23 @@ provides:
     - name: speckit.constitution-guardian.preflight
       file: commands/speckit.constitution-guardian.preflight.md
       description: "Gate + foundational interview before /speckit-constitution (from-scratch projects only)"
+    - name: speckit.constitution-guardian.normalize
+      file: commands/speckit.constitution-guardian.normalize.md
+      description: "Classify domain (back/front/CI-CD) and normalize non-technical text before /speckit-constitution"
     - name: speckit.constitution-guardian.traceability
       file: commands/speckit.constitution-guardian.traceability.md
       description: "Dispatch the constitution-traceability agent after /speckit-constitution"
 
 hooks:
   before_constitution:
-    command: speckit.constitution-guardian.preflight
-    optional: false
-    description: "Interview the user for a from-scratch constitution (self-gated: only when no constitution exists and the project is empty/basic)"
+    - command: speckit.constitution-guardian.preflight
+      optional: false
+      priority: 10
+      description: "Interview the user for a from-scratch constitution (self-gated: only when no constitution exists and the project is empty/basic)"
+    - command: speckit.constitution-guardian.normalize
+      optional: false
+      priority: 20
+      description: "Classify domain (back/front/CI-CD) and rewrite non-technical text into engineering language, writing a .txt (runs whenever there is text)"
   after_constitution:
     command: speckit.constitution-guardian.traceability
     optional: false

@@ -1,28 +1,19 @@
 # Spec open questions (deferred by spec-author-normalizer)
 
 - Author detected: Product Owner (confidence: med)
-- Contexto ya decidido (no volver a preguntar): `research.md` de la spec 001 fija el mecanismo de
-  autenticación como JWT emitido por el backend tras login con usuario/contraseña, con el rol
-  (técnico/dispatcher/supervisor) viajando como claim (Q-A, ADR-0001). FR-012 ya exige "acceso
-  autenticado" pero no describe la pantalla ni el flujo de login — es ese vacío el que esta
-  normalización busca cubrir.
-- Q1: ¿Quién crea las cuentas de usuario (alta de técnico/dispatcher/supervisor)? ¿Existe un flujo
-  de auto-registro o las cuentas las provisiona un administrador/supervisor fuera de esta feature?
-- Q2: ¿Debe existir un flujo de recuperación/reseteo de contraseña ("olvidé mi contraseña")? Si sí,
-  ¿por email, por un administrador, u otro canal? No hay ninguna mención en el texto original.
-- Q3: ¿Existe bloqueo de cuenta tras N intentos fallidos de login? Si sí, ¿cuántos intentos y bajo
-  qué mecanismo de desbloqueo? No especificado.
-- Q4: ¿Debe existir una opción "recordarme" / duración de sesión configurable, o la duración de la
-  sesión (expiración del JWT) es un detalle puramente técnico sin relevancia de producto? No se
-  indicó ninguna preferencia.
-- Q5: ¿Qué mensaje debe mostrarse ante credenciales inválidas? ¿Debe distinguir "usuario no existe"
-  de "contraseña incorrecta", o debe usar un mensaje genérico por seguridad (para no revelar qué
-  parte del dato es incorrecta)? No especificado en el texto original.
-- Q6: ¿Hay requisito de cierre de sesión (logout) explícito visible al usuario, o basta con que el
-  token expire? No se mencionó.
-- Q7: ¿Aplica alguna política de complejidad de contraseña (longitud mínima, caracteres requeridos)
-  más allá del uso de usuario/contraseña ya decidido en research.md? No especificado — no se
-  inventa ninguna regla concreta.
-- Q8: ¿Se requiere alguna medida de accesibilidad o de UI específica para la pantalla de login
-  (idioma, dispositivo móvil de campo para el técnico, modo offline), dado que el técnico opera en
-  campo? No se mencionó nada al respecto en el texto original.
+
+Estado tras la resolución del usuario (2026-07-13). Ver `specs/002-cicd-pipeline/pipeline-specify.md`.
+
+- Q1: ✅ RESUELTA — Ambos componentes se empaquetan como imágenes en GHCR
+  (`ghcr.io/<org>/<repo>/fieldops-<comp>:<ver>`), auth con `GITHUB_TOKEN`, `permissions: packages: write`.
+- Q2: ⚠️ ABIERTA (menor) — Alcance de Trivy: se asume que aplica a la imagen de cada componente
+  modificado (coherente con FR-003/FR-005g). Confirmar en planning si aplica solo a uno.
+- Q3: ✅ RESUELTA — Acceptance criteria verificados con Spectral.
+- Q4: ⚠️ ABIERTA (sin confirmar) — "Constitución del sistema" del gate por IA. Asunción: docs de
+  `.specify/memory/` (`constitution.md` + `pipeline-constitution.md`). Confirmar en `/speckit-plan`
+  junto al contrato de E/S y evals del agente (FR-005h/FR-017).
+- Q5: ✅ RESUELTA (vía pipeline-constitution v1.1.0) — Fase de prueba: cualquier miembro del equipo aprueba.
+- Q6: ✅ RESUELTA — Snapshots de dev versionadas por SHA de commit (FR-007).
+- Q7: ✅ RESUELTA (vía pipeline-constitution v1.1.0) — SemVer por Conventional Commits, por componente.
+- Q8: ✅ RESUELTA — `pre` respeta el aislamiento por componente; solo se redespliega lo cambiado (FR-010b).
+- Q9: ✅ RESUELTA (vía pipeline-constitution v1.1.0, Principio VIII) — Rollback al último artefacto estable (FR-014).

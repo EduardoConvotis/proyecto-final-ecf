@@ -71,6 +71,14 @@ hooks:
     prompt: Run the from-scratch constitution interview?
     description: Interview the user for a from-scratch constitution (self-gated)
     condition: null
+  - extension: constitution-guardian
+    command: speckit.constitution-guardian.normalize
+    enabled: true
+    optional: false
+    priority: 20
+    prompt: Classify domain and normalize the constitution input?
+    description: Classify back/front/CI-CD and rewrite non-technical text into engineering language, writing a .txt
+    condition: null
   after_constitution:
   - extension: constitution-guardian
     command: speckit.constitution-guardian.traceability

@@ -1,0 +1,72 @@
+# Constitution input — normalized by constitution-author-normalizer
+
+Domain (primary): ci-cd
+Domain (all):     ci-cd, frontend, backend
+Register:         non-technical → normalized
+Confidence:       med
+
+--- Normalized text ---
+Gobernanza del flujo de CI/CD de FieldOps, desde desarrollo hasta producción.
+
+1. Estrategia de ramas
+   El repositorio opera con exactamente tres tipos de rama:
+   - Ramas `feature/*`: trabajo de desarrollo diario.
+   - Rama `develop`: línea de integración continua.
+   - Rama `main`: línea de producción.
+   No se permiten otros tipos de rama de larga vida.
+
+2. Independencia de componentes (frontend / backend)
+   Frontend y backend son componentes independientes, cada uno con su propio pipeline
+   de CI/CD. Los pipelines deben detectar qué componente(s) ha(n) cambiado (change
+   detection basado en rutas del monorepo) y ejecutar únicamente el pipeline
+   correspondiente al componente modificado. Un cambio exclusivo de frontend no debe
+   disparar ejecución de pipeline de backend, y viceversa.
+
+3. Gate de Pull Request hacia `develop`
+   Toda PR de una rama `feature/*` hacia `develop` debe pasar, para el componente
+   modificado, la siguiente batería de validaciones automáticas antes de poder
+   fusionarse:
+   - Lint.
+   - Tests automatizados.
+   - Validación del contrato OpenAPI con Spectral.
+   - Detección de breaking changes con oasdiff.
+   - Escaneo de secretos con Gitleaks.
+   - Verificación de acceptance criteria contra la API.
+   - Análisis de vulnerabilidades de la imagen de contenedor con Trivy.
+   - Revisión automática de cumplimiento de la constitución del sistema, ejecutada
+     por el agente vía llamada a su API.
+   Si cualquiera de estos gates falla, el merge queda bloqueado.
+
+4. Despliegue automático en `develop` → `dev`
+   Al fusionarse una PR en `develop`, se debe construir automáticamente una versión
+   snapshot del componente modificado y desplegarla automáticamente, y únicamente,
+   en el entorno `dev`. Ningún otro entorno se ve afectado por este merge.
+
+5. Release y despliegue desde `main`
+   Todo cambio que llega a `main` constituye una versión final. Debe:
+   - Construirse con una versión semver limpia (sin sufijo de snapshot/prerelease).
+   - Publicarse como release en GitHub, incluyendo los artefactos de build.
+   - Desplegarse automáticamente en el entorno `pre`.
+   El despliegue a producción requiere autorización manual explícita de una persona
+   del equipo; ningún despliegue a `prod` puede ejecutarse sin dicha aprobación.
+
+6. Inmutabilidad de artefactos de contenedor
+   Las imágenes Docker se publican en un registro centralizado. Una vez que una
+   imagen ha superado CI y ha sido publicada en el registro, el job de despliegue
+   debe consumir esa misma imagen directamente, sin reconstruirla. La imagen que
+   pasó CI es la misma que se despliega en cada entorno posterior (dev, pre, prod).
+
+7. Principio de verificabilidad previa
+   Cualquier persona que implemente este flujo debe traducir cada requisito de
+   gobernanza a criterios verificables antes de escribir configuración de pipeline
+   (YAML u otro). No se debe codificar un pipeline sin haber definido primero cómo
+   se comprueba el cumplimiento de cada regla.
+
+--- Deferred questions ---
+¿Qué ocurre cuando una misma PR modifica frontend y backend simultáneamente: se ejecutan ambos pipelines en paralelo, o existe alguna regla adicional de coordinación entre ellos?
+¿Qué determina el incremento de versión semver en `main` (major/minor/patch): convención de commits, decisión manual, otro mecanismo?
+¿Qué rol o permiso específico habilita a "alguien del equipo" para autorizar el despliegue a producción (p. ej., un rol de release manager, cualquier miembro del equipo, un grupo determinado)?
+¿Existe algún mecanismo de rollback o política de reversión en caso de fallo tras el despliegue a `pre` o `prod`? El texto no lo menciona y no se ha asumido nada al respecto.
+¿El "análisis de acceptance criteria contra la API" en el gate de PR corresponde a una herramienta o proceso específico ya definido en el módulo 9, o debe especificarse aún?
+
+Estas preguntas deben plantearse al usuario DESPUÉS de que el comando de constitución finalice; no deben responderse por suposición.
