@@ -24,9 +24,20 @@ backend) y añade **ADR-0010** para las piezas genuinamente nuevas: hashing de c
 provisión (bcrypt) y logout stateless (sin blacklist, sin requisito que lo exija). Ver §2.1, §2.2,
 §3.3 y `docs/adr/README.md` (changelog).
 
-**Constitución trazada**: v1.2.0 (`.specify/memory/constitution.md`).
+**Tercera regeneración (2026-07-13, previa a `/speckit-plan` de `002-cicd-pipeline`)**: repositorio
+**existente** (no greenfield) — ya hay `frontend/`, `backend/`, `contracts/openapi.yaml` y un
+`.github/workflows/ci.yml` consolidado. Se añade la §7 (CI/CD Pipeline) para gobernar cómo el
+código fluye de `feature/*` a producción, bajo la constitución **separada**
+`.specify/memory/pipeline-constitution.md` v1.1.0. Esta sección no modifica ninguna decisión de
+las §1–6 (arquitectura de aplicación de la feature 001); se añaden ADR-0011…ADR-0015 (ver
+`docs/adr/README.md`, changelog).
+
+**Constitución trazada**: v1.2.0 (`.specify/memory/constitution.md`) para la arquitectura de
+aplicación (§1–6); v1.1.0 (`.specify/memory/pipeline-constitution.md`) para la arquitectura de
+CI/CD (§7).
 **Feature que motiva esta propuesta**: `specs/001-order-execution-workflow/spec.md` (ejecución y
-revisión de órdenes de trabajo).
+revisión de órdenes de trabajo) para §1–6; `specs/002-cicd-pipeline/pipeline-specify.md` (flujo de
+CI/CD gobernado) para §7.
 **Decisiones de detalle**: ver `docs/adr/` (índice en `docs/adr/README.md`). Este documento resume
 la arquitectura; los ADR documentan cada decisión significativa y su alternativa descartada.
 
@@ -271,7 +282,7 @@ un paquete compartido hoy sería complejidad especulativa sin un segundo consumi
 
 ---
 
-## 6. Preguntas abiertas
+## 6. Preguntas abiertas (arquitectura de aplicación, feature 001)
 
 - ✅ **RESUELTO (2026-07-10, US6).** Mecanismo de login/emisión de token: JWT tras
   usuario/contraseña propio (ver `research.md` Q-A y ADR-0010); no hay IdP externo en alcance.
@@ -285,3 +296,140 @@ un paquete compartido hoy sería complejidad especulativa sin un segundo consumi
   gestionado/cloud): fuera del alcance de esta propuesta; no hay requisito de la spec que lo fije.
 - **Código de respuesta para fallo de ownership (403 vs 404)**: ya identificado como open question
   en ADR-0001; no se duplica aquí, solo se referencia.
+
+---
+
+## 7. CI/CD Pipeline (feature 002-cicd-pipeline)
+
+**Estado del repositorio para esta propuesta (2026-07-13)**: existente, no greenfield. Ya hay
+`frontend/`, `backend/`, `contracts/openapi.yaml` y un único workflow consolidado
+(`.github/workflows/ci.yml`) que hace de puerta de calidad genérica sobre `push: main` y
+`pull_request` (sin distinguir componente ni rama `develop`). Esta sección **no** rediseña la
+arquitectura de aplicación de las secciones 1–6; propone la arquitectura de **entrega continua**
+que gobierna cómo ese código llega de `feature/*` a producción, y sustituirá conceptualmente a
+`ci.yml` por los 6 workflows descritos abajo (la escritura del YAML es tarea del plan/tasks, no de
+esta propuesta).
+
+### 7.1 Contexto y drivers
+
+- **Constitución que gobierna esta feature**: `.specify/memory/pipeline-constitution.md` v1.1.0,
+  Principios I–VIII (ramas, independencia de componentes, puertas de PR, CI+deploy a dev, release
+  gobernado a prod, inmutabilidad, verificabilidad previa, rollback gobernado).
+- **Constitución de proyecto**: `.specify/memory/constitution.md` v1.2.0 — Contract-First (VII,
+  puertas Spectral/oasdiff sobre `contracts/openapi.yaml`), SemVer (VI), Observabilidad (V, logs de
+  los propios workflows/jobs siguen siendo estructurados donde aplique).
+- **Spec**: `specs/002-cicd-pipeline/pipeline-specify.md`, FR-001…FR-017 (+FR-003b/FR-010b), 5
+  historias de usuario.
+- **Decisiones ya fijadas por el usuario** (no se reabren, solo se documentan y ADRan): GitHub
+  Actions como orquestador; GHCR como registro
+  (`ghcr.io/<org>/<repo>/fieldops-<componente>:<version>`, auth vía `GITHUB_TOKEN` inyectado,
+  `permissions: packages: write`); exactamente 6 workflows; matriz de puertas fija por componente;
+  aislamiento por componente vía detección de cambios por rutas; build-once/promote; gate de
+  constitución fail-closed (FR-017).
+
+### 7.2 Topología: 6 workflows
+
+Cada componente (frontend, backend) tiene su propio conjunto de 3 workflows, sin dependencias
+cruzadas de orquestación (Principio II, pipeline-constitution — independencia). El contrato
+(`contracts/openapi.yaml`) es una ruta **compartida**: un cambio en él dispara **ambos** pipelines
+del componente correspondiente a esa etapa, ya que ambos consumen el contrato (frontend vía tipos
+generados, backend vía validación de esquema) — esto realiza FR-004 también para cambios que solo
+tocan el contrato.
+
+| # | Workflow (propuesto) | Trigger | Paths | Jobs (gate matrix, ver 7.4) |
+|---|---|---|---|---|
+| 1 | `pr-validate-frontend.yml` | `pull_request` → `develop` | `frontend/**`, `contracts/openapi.yaml` | lint+test (`npm test`), Gitleaks, revisión de constitución (agente), code-review-recorded (dummy) |
+| 2 | `pr-validate-backend.yml` | `pull_request` → `develop` | `backend/**`, `contracts/openapi.yaml` | lint+test, Spectral, oasdiff, Gitleaks, `check-acceptance.js`, Trivy (imagen de build efímero, no publicado), revisión de constitución, code-review-recorded |
+| 3 | `develop-frontend.yml` | `push` → `develop` | `frontend/**`, `contracts/openapi.yaml` | build imagen snapshot (`sha-<gitsha>`) → push GHCR → deploy `dev` |
+| 4 | `develop-backend.yml` | `push` → `develop` | `backend/**`, `contracts/openapi.yaml` | build imagen snapshot (`sha-<gitsha>`) → push GHCR → deploy `dev` |
+| 5 | `main-frontend.yml` | `push` → `main` | `frontend/**`, `contracts/openapi.yaml` | SemVer (Conventional Commits, tag `frontend-vX.Y.Z`) → build+push GHCR → GitHub Release → deploy `pre` (auto) → aprobación manual (`environment: prod`) → promoción a `prod` (redeploy misma imagen) |
+| 6 | `main-backend.yml` | `push` → `main` | `backend/**`, `contracts/openapi.yaml` | ídem, tag `backend-vX.Y.Z` |
+
+Cada workflow arranca con un job de **change detection** (por rutas) que decide si el resto de
+jobs se ejecuta; si las rutas del componente no cambiaron, el workflow no ejecuta build/deploy
+(FR-003, FR-003b) — ver ADR-0013.
+
+### 7.3 Flujo de artefactos y registro (build once / promote)
+
+- Cada imagen se construye **una sola vez**, en el workflow `develop-*` (snapshot) o `main-*`
+  (release), y se publica en GHCR bajo `ghcr.io/<org>/<repo>/fieldops-<componente>:<tag>`.
+  - Snapshot (dev): tag = `sha-<gitsha>` (FR-007).
+  - Release (main): tag = SemVer limpio del componente (p. ej. `1.4.0`), derivado de Conventional
+    Commits; además se etiqueta el release/tag de Git como `<componente>-vX.Y.Z` (Principio V).
+- Los jobs de **deploy** (a `dev`, `pre` o `prod`) nunca reconstruyen: referencian la imagen ya
+  publicada por su tag/digest (FR-012, FR-013, Principio VI). La promoción `pre → prod` es un
+  redeploy de la **misma** referencia de imagen tras la aprobación manual — no un nuevo build.
+- **Excepción explícita y documentada**: el job de Trivy en `pr-validate-backend.yml` (workflow 2)
+  SÍ construye una imagen — pero es una imagen de **PR**, nunca publicada en GHCR ni desplegada a
+  ningún entorno; existe solo para el escaneo y se descarta al terminar el job. No viola build-once
+  porque el artefacto inmutable que viaja por dev→pre→prod es el que construye `develop-backend.yml`
+  o `main-backend.yml`, no este. Se documenta para que no se confunda con el artefacto canónico
+  (ver ADR-0012, riesgo).
+- **Rollback** (FR-014, FR-016, Principio VIII): un workflow de reversión (manual,
+  `workflow_dispatch`) redespliega el último tag estable conocido desde GHCR a `dev`/`pre` sin
+  reconstruir; en `prod` pasa por el mismo `environment: prod` con aprobación manual que un deploy
+  normal. Cada ejecución de rollback registra en el log del job (o en un comentario/anotación del
+  run) qué versión se revierte, a cuál se vuelve y quién aprobó — trazabilidad exigida por FR-014.
+
+### 7.4 Matriz de puertas (gate → herramienta → componente)
+
+| Puerta | Herramienta | Frontend | Backend | Principio (pipeline-constitution) |
+|---|---|---|---|---|
+| Lint + tests unitarios | `npm test` | ✅ | ✅ | III |
+| Validación de contrato OpenAPI | Spectral | — | ✅ | III; VII (constitution.md) |
+| Detección de breaking changes | oasdiff | — | ✅ | III |
+| Escaneo de secretos | Gitleaks | ✅ | ✅ | III |
+| Acceptance criteria vs API | `check-acceptance.js` | — | ✅ | III |
+| Vulnerabilidades de imagen | Trivy | — | ✅ | III |
+| Revisión de constitución | Claude Code Action (agente) | ✅ | ✅ | III; fail-closed FR-017 |
+| Registro de revisión de código | job/stage dummy que certifica el paso | ✅ | ✅ | III (placeholder hasta que exista revisión humana obligatoria) |
+
+Si **cualquier** puerta del componente afectado falla, el job de merge-gate del workflow PR queda
+en rojo y GitHub bloquea el merge vía *required status checks* de `develop` (sin bypass manual,
+FR-006) — este mecanismo de bloqueo (branch protection rule) es responsabilidad de configuración
+del repositorio, no del propio YAML, y debe activarse junto con el merge del plan (a anotar en
+tasks).
+
+### 7.5 Dónde conectan el gate de IA y el de acceptance-criteria
+
+- **Revisión de constitución (agente)**: job dedicado en ambos workflows PR-validator, que invoca
+  Claude Code Action contra `.specify/memory/constitution.md` y
+  `.specify/memory/pipeline-constitution.md` (el spec deja esto como asunción no confirmada — ver
+  §7.7). El job **debe** producir un resultado binario explícito (pass/fail); cualquier resultado
+  indeterminado, error de la llamada o timeout se mapea a **fail**, nunca a éxito por omisión
+  (FR-017, Principio VII pipeline-constitution — verificabilidad previa). Ver ADR-0015.
+- **Acceptance criteria (`check-acceptance.js`)**: job solo en el workflow backend, después de que
+  Spectral valide el contrato; contrasta los escenarios de aceptación de la spec activa contra las
+  operaciones definidas en `contracts/openapi.yaml` (p. ej.: cada `FR-XXX` con escenario tiene una
+  operación/response correspondiente). Es un script propio del repo (no una herramienta de
+  terceros), coherente con que la constitución de pipeline deja la herramienta de esta puerta
+  agnóstica (Principio VII, pipeline-constitution).
+
+### 7.6 Entornos y promoción
+
+| Entorno | Origen | Disparo | Aprobación |
+|---|---|---|---|
+| `dev` | `develop` | automático tras merge | ninguna |
+| `pre` | `main` | automático tras push a `main` (release) | ninguna |
+| `prod` | `pre` (misma imagen) | manual | GitHub Environment `prod` con *required reviewers*; en fase de prueba, cualquier miembro del equipo puede aprobar (Principio V, pipeline-constitution) |
+
+`dev` y `pre` se modelan como GitHub Environments sin protección; `prod` como GitHub Environment
+con regla de aprobación manual — mecanismo nativo de GitHub Actions para materializar el "gate" de
+aprobación de FR-011/FR-016 sin construir un sistema de aprobaciones ad-hoc (Principio II).
+
+### 7.7 Preguntas abiertas (CI/CD)
+
+- **Alcance de "constitución del sistema" para el agente (Q4 de la spec, sin confirmar)**: se asume
+  que son ambos documentos de `.specify/memory/` (`constitution.md` + `pipeline-constitution.md`).
+  Pendiente de confirmación explícita del usuario en `/speckit-plan`.
+- **Dockerfiles**: hoy no existen `frontend/Dockerfile` ni `backend/Dockerfile` en el repo; son
+  prerrequisito de los jobs de build de los workflows 3–6. Su creación es tarea de
+  implementación (`/speckit-tasks`), no de esta arquitectura.
+- **Endurecimiento de la aprobación a `prod`** (rol/permiso concreto, hoy "cualquier miembro del
+  equipo"): explícitamente diferido por la propia constitución de pipeline a una enmienda futura;
+  no se decide aquí.
+- **Herramienta de change-detection concreta** (p. ej. `dorny/paths-filter` vs. `git diff` manual
+  en un job): se fija en ADR-0013 como decisión de plan, no reabre principio alguno.
+- **`ci.yml` existente**: queda pendiente de que el plan decida si se retira en el mismo cambio que
+  introduce los 6 workflows nuevos o se retira en un paso posterior; no es una decisión de
+  arquitectura sino de secuenciación de tareas.
