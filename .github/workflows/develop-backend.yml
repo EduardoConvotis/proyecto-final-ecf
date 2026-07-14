@@ -29,6 +29,7 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run gen:api --workspace backend
+      - run: npx --workspace backend prisma generate   # sin esto, tx: any (TS7006)
       - run: npm run typecheck --workspace backend
       - run: npm run lint --workspace backend
       - run: npm run test --workspace backend
