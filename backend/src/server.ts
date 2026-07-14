@@ -14,6 +14,14 @@ export function createApp() {
   app.use(express.json());
   app.use(pinoHttp({ logger })); // logging estructurado por request (Principio V)
 
+  // Healthchecks: usados por el gate de acceptance (tools/ci/acceptance/backend.json),
+  // por `wait-on` en CI y por los healthchecks de despliegue. No tocan la base de datos.
+  const health = (_req: express.Request, res: express.Response) => {
+    res.status(200).json({ status: 'ok' });
+  };
+  app.get('/health', health);
+  app.get('/api/health', health);
+
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1', executionRouter);
   app.use('/api/v1', reviewRouter);
