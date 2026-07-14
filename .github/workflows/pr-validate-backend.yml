@@ -131,7 +131,7 @@ jobs:
       - name: Build imagen (para escaneo; no se publica aquí)
         run: docker build -f backend/Dockerfile -t fieldops-back:pr .
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@v0.28.0   # los tags llevan prefijo v (0.28.0 no existe)
+        uses: aquasecurity/trivy-action@v0.36.0   # v0.28.0 referenciaba setup-trivy@v0.2.1 (tag roto)
         with:
           image-ref: fieldops-back:pr
           exit-code: '1'
