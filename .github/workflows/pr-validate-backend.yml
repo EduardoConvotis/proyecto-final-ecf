@@ -168,6 +168,7 @@ jobs:
       - run: echo "Code review registrado como stage certificador (placeholder de revisión por pares futura)."
 
   gate:                            # Agregador SIEMPRE presente → único required check del ruleset.
+    name: backend-gate             # nombre único del check-run (evita colisión con el gate de frontend)
     if: always()                   # skipped (aislamiento FR-003b) cuenta como OK; failure/cancelled bloquea.
     needs:
       - changes
