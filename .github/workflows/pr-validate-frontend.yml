@@ -1,22 +1,37 @@
 # PR validator — FRONTEND (feature 002-cicd-pipeline).
 # Gate de PR feature/* → develop. Jobs bloqueantes (FR-005/006). Sin bypass.
-# Aislamiento (FR-003b): solo corre si cambió frontend/ o el contrato. Paralelo al de backend (FR-004, FR-002).
+# Aislamiento (FR-003b): el workflow SIEMPRE dispara, pero cada gate se salta si no cambió
+# frontend/ ni el contrato (job `changes`). El job `gate` corre siempre y agrega el resultado,
+# de modo que el ruleset puede exigir un único check (`pr-validate-frontend / gate`) que nunca
+# queda colgado. Paralelo al de backend (FR-004, FR-002).
 
 name: pr-validate-frontend
 
 on:
   pull_request:
     branches: [develop]
-    paths:
-      - 'frontend/**'
-      - 'contracts/openapi.yaml'
 
 permissions:
   contents: read
   pull-requests: read
 
 jobs:
+  changes:                         # Detecta si este PR toca el frontend (aislamiento FR-003b)
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'contracts/openapi.yaml'
+
   lint-test:                       # FR-005a
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +44,8 @@ jobs:
       - run: npm run test --workspace frontend
 
   secrets-gitleaks:                # FR-005e
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +55,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   constitution-review:             # FR-005h / FR-017 (fail-closed)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     permissions: { contents: read, pull-requests: read }
     steps:
@@ -60,6 +79,30 @@ jobs:
           fi
 
   code-review-recorded:            # Job dummy certificador
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - run: echo "Code review registrado como stage certificador (placeholder de revisión por pares futura)."
+
+  gate:                            # Agregador SIEMPRE presente → único required check del ruleset.
+    if: always()                   # skipped (aislamiento FR-003b) cuenta como OK; failure/cancelled bloquea.
+    needs:
+      - changes
+      - lint-test
+      - secrets-gitleaks
+      - constitution-review
+      - code-review-recorded
+    runs-on: ubuntu-latest
+    steps:
+      - name: Agregar resultados de los gates
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "resultados de los gates: $results"
+          for r in $results; do
+            case "$r" in
+              success|skipped) ;;  # OK: pasó, o se saltó por no aplicar a este PR
+              *) echo "::error title=gate::un gate requerido terminó en '$r' (FR-006, sin bypass)"; exit 1 ;;
+            esac
+          done
+          echo "Todos los gates requeridos pasaron o se saltaron por aislamiento (FR-003b)."

@@ -1,16 +1,15 @@
 # PR validator — BACKEND (feature 002-cicd-pipeline).
 # Gate de PR feature/* → develop. Todos los jobs son bloqueantes (FR-005/006). Sin bypass.
-# Aislamiento (FR-003b): solo corre si cambió backend/ o el contrato. Paralelo al de frontend (FR-004, FR-002).
+# Aislamiento (FR-003b): el workflow SIEMPRE dispara, pero cada gate se salta si no cambió
+# backend/ ni el contrato (job `changes`). El job `gate` corre siempre y agrega el resultado,
+# de modo que el ruleset puede exigir un único check (`pr-validate-backend / gate`) que nunca
+# queda colgado. Paralelo al de frontend (FR-004, FR-002).
 
 name: pr-validate-backend
 
 on:
   pull_request:
     branches: [develop]
-    paths:
-      - 'backend/**'
-      - 'contracts/openapi.yaml'
-      - 'tools/ci/**'
 
 permissions:
   contents: read
@@ -18,7 +17,23 @@ permissions:
   pull-requests: read
 
 jobs:
+  changes:                         # Detecta si este PR toca el backend (aislamiento FR-003b)
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'contracts/openapi.yaml'
+              - 'tools/ci/**'
+
   lint-test:                       # FR-005a
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -41,12 +56,16 @@ jobs:
       - run: npm run test --workspace backend
 
   openapi-spectral:                # FR-005c
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: npx --yes @stoplight/spectral-cli lint contracts/openapi.yaml
 
   breaking-oasdiff:                # FR-005d
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +80,8 @@ jobs:
           fail-on: ERR
 
   secrets-gitleaks:                # FR-005e
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +91,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   acceptance:                      # FR-005f (check-acceptance.js contra la API real)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -96,6 +119,8 @@ jobs:
         run: node tools/ci/check-acceptance.js --base "$API_BASE_URL" --checks tools/ci/acceptance/backend.json
 
   trivy-image:                     # FR-005g
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,6 +134,8 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
   constitution-review:             # FR-005h / FR-017 (fail-closed)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions: { contents: read, pull-requests: read }
     steps:
@@ -134,6 +161,34 @@ jobs:
           fi
 
   code-review-recorded:            # Job dummy que certifica el paso de code review (trazado, no oculto)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - run: echo "Code review registrado como stage certificador (placeholder de revisión por pares futura)."
+
+  gate:                            # Agregador SIEMPRE presente → único required check del ruleset.
+    if: always()                   # skipped (aislamiento FR-003b) cuenta como OK; failure/cancelled bloquea.
+    needs:
+      - changes
+      - lint-test
+      - openapi-spectral
+      - breaking-oasdiff
+      - secrets-gitleaks
+      - acceptance
+      - trivy-image
+      - constitution-review
+      - code-review-recorded
+    runs-on: ubuntu-latest
+    steps:
+      - name: Agregar resultados de los gates
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "resultados de los gates: $results"
+          for r in $results; do
+            case "$r" in
+              success|skipped) ;;  # OK: pasó, o se saltó por no aplicar a este PR
+              *) echo "::error title=gate::un gate requerido terminó en '$r' (FR-006, sin bypass)"; exit 1 ;;
+            esac
+          done
+          echo "Todos los gates requeridos pasaron o se saltaron por aislamiento (FR-003b)."
