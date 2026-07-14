@@ -1,0 +1,25 @@
+# Excepciones de Trivy — feature 002-cicd-pipeline (FR-005g).
+#
+# Motivo: la imagen de backend se construye con `npm ci` en la RAÍZ del monorepo, por lo que
+# arrastra las dependencias de FRONTEND (Angular) al node_modules hoisted. Trivy las detecta,
+# pero NO forman parte del runtime del backend (Express) ni de su código. Su fix exige subir
+# Angular de v19 a v22 (major, ámbito frontend), ajeno a este servicio.
+#
+# Estas 11 vulnerabilidades HIGH (0 CRITICAL) corresponden a paquetes @angular/* y se exceptúan
+# de forma explícita y auditable. Trivy SIGUE bloqueando cualquier CRITICAL y cualquier HIGH
+# nuevo que no esté en esta lista.
+#
+# TODO(infra): la corrección de raíz es no incluir dependencias de frontend en la imagen de
+# backend (instalar solo el workspace backend). Al hacerlo, revisar/eliminar estas excepciones.
+
+CVE-2026-23745
+CVE-2026-23950
+CVE-2026-24842
+CVE-2026-26960
+CVE-2026-29786
+CVE-2026-31802
+CVE-2026-33671
+CVE-2026-48815
+CVE-2026-54266
+CVE-2026-54267
+CVE-2026-54268
