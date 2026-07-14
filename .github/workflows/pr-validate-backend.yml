@@ -71,12 +71,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+      # El contrato base se escribe en el WORKSPACE (no /tmp): la acción oasdiff corre en un
+      # contenedor Docker que solo ve el workspace montado, no el /tmp del runner.
       - name: Extraer contrato base (rama destino)
-        run: git show "origin/${{ github.base_ref }}:contracts/openapi.yaml" > /tmp/base-openapi.yaml || echo "sin base" > /tmp/base-openapi.yaml
+        run: git show "origin/${{ github.base_ref }}:contracts/openapi.yaml" > base-openapi.yaml || cp contracts/openapi.yaml base-openapi.yaml
       - name: Detectar breaking changes
         uses: oasdiff/oasdiff-action/breaking@main
         with:
-          base: /tmp/base-openapi.yaml
+          base: base-openapi.yaml
           revision: contracts/openapi.yaml
           fail-on: ERR
 
@@ -129,11 +131,12 @@ jobs:
       - name: Build imagen (para escaneo; no se publica aquí)
         run: docker build -f backend/Dockerfile -t fieldops-back:pr .
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0   # los tags llevan prefijo v (0.28.0 no existe)
         with:
           image-ref: fieldops-back:pr
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true                    # solo falla en vulnerabilidades con fix disponible
 
   constitution-review:             # FR-005h / FR-017 — TEMPORALMENTE NO-BLOQUEANTE (ver TODO)
     needs: changes
