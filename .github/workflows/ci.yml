@@ -32,6 +32,8 @@ jobs:
       - run: npm ci
       # Contract-first (Principio VII): tipos derivados del contrato antes de compilar.
       - run: npm run gen:api --workspaces
+      # Cliente Prisma: sin generar, $transaction infiere `any` en los callbacks (TS7006).
+      - run: npx --workspace backend prisma generate
       - run: npm run db:migrate --workspace backend -- --skip-generate || npx --workspace backend prisma migrate deploy
       # Principio I: TypeScript estricto sin any injustificado.
       - run: npm run typecheck

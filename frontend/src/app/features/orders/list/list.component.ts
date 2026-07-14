@@ -2,7 +2,11 @@ import { Component, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import type { WorkOrder } from '../../../core/api/api-types';
+import type { components } from '../../../core/api/api-types';
+
+// Tipo derivado del contrato (Principio VII): openapi-typescript expone los schemas
+// bajo `components['schemas']`, no como exports nombrados.
+type WorkOrder = components['schemas']['WorkOrder'];
 
 // Listado de órdenes propias (US4, FR-010). Tailwind con tokens centralizados (Principio VIII).
 @Component({

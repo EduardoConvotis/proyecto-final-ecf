@@ -24,6 +24,8 @@ describe('authGuard', () => {
   it('redirige a /login si no hay sesión', () => {
     setup(false);
     const result = TestBed.runInInjectionContext(() => authGuard({} as never, {} as never));
-    expect(result).toBe('/login');
+    // El mock de Router.parseUrl devuelve la ruta como string; comparamos vía unknown
+    // porque GuardResult (boolean | UrlTree) no incluye string.
+    expect(result as unknown).toBe('/login');
   });
 });
